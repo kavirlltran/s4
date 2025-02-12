@@ -129,7 +129,7 @@
         navigator.mediaDevices.getUserMedia({ audio: true })
           .then(function(stream) {
             console.log("Microphone access granted.");
-            // Tạm dừng stream nếu không sử dụng ngay (Speech Recognition sẽ tự quản lý)
+            // Tạm dừng stream vì Speech Recognition sẽ tự quản lý việc truy cập micro
             stream.getTracks().forEach(track => track.stop());
           })
           .catch(function(err) {
@@ -158,6 +158,8 @@
     let selectedText = null;
     let recognition = null;
     let recognizing = false;
+    // Biến cờ để xác định xem có tự động khởi động lại phiên ghi âm hay không
+    let shouldRestart = false;
     
     /***** Hàm hiển thị các dòng nội dung và xử lý dấu trọng âm *****/
     function renderTextLines() {
@@ -270,8 +272,7 @@
       recog.lang = "en-US"; // Sử dụng tiếng Anh cho nhận diện
       recog.interimResults = false;
       recog.maxAlternatives = 1;
-      // Thiết lập continuous = true để loại bỏ tính năng tự dừng ghi âm
-      recog.continuous = true;
+      recog.continuous = true; // Yêu cầu phiên ghi âm liên tục
       return recog;
     }
     
@@ -296,11 +297,16 @@
       });
       
       recognition.addEventListener("end", () => {
-        recognizing = false;
-        // Nếu phiên ghi âm kết thúc (chỉ khi người dùng nhấn Stop) thì cập nhật giao diện
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        console.log("Recording ended.");
+        // Nếu shouldRestart vẫn true (tức là chưa nhấn nút Stop) thì tự động khởi động lại
+        if (shouldRestart) {
+          console.log("Auto restarting recognition...");
+          recognition.start();
+        } else {
+          recognizing = false;
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+          console.log("Recording ended.");
+        }
       });
       
       recognition.addEventListener("error", (event) => {
@@ -318,6 +324,8 @@
         return;
       }
       if (recognition && !recognizing) {
+        // Cho phép tự khởi động lại khi không có yêu cầu dừng từ người dùng
+        shouldRestart = true;
         resultDiv.innerHTML = "Recording... Please read the text.";
         startBtn.disabled = true;
         stopBtn.disabled = false;
@@ -327,6 +335,8 @@
     
     stopBtn.addEventListener("click", () => {
       if (recognition && recognizing) {
+        // Khi người dùng nhấn Stop, ngừng tự động khởi động lại
+        shouldRestart = false;
         recognition.stop();
       }
     });
