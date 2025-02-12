@@ -1,226 +1,335 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Speech Evaluation Demo</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Speech Comparison App</title>
   <style>
+    /* Reset cơ bản */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    /* 
+      Tạo nền phong cách tương lai:
+      - linear-gradient tạo hiệu ứng chuyển màu sâu, hiện đại.
+      - radial-gradient lặp lại tạo hiệu ứng "sao" nhẹ.
+    */
     body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      line-height: 1.6;
+      font-family: 'Roboto', sans-serif;
+      background: 
+        radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px),
+        linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      background-size: 50px 50px, cover;
+      background-attachment: fixed;
+      color: #ffffff;
+      padding: 20px;
+      min-height: 100vh;
     }
     h1 {
       text-align: center;
+      margin-bottom: 20px;
     }
-    .sentence {
-      padding: 10px;
-      border: 1px solid #ddd;
-      margin: 10px 0;
-      cursor: pointer;
-      transition: background-color 0.3s;
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
     }
-    .sentence.selected {
-      background-color: #f0f8ff;
-      border-color: #00aaff;
-    }
-    .sentence span.word {
-      margin-right: 5px;
-      font-size: 18px;
-    }
-    /* Mặc định, nếu từ được coi là trọng âm (content word) thì hiển thị màu xanh */
-    .word.stressed {
-      color: blue;
-    }
-    /* Nếu phát hiện lỗi, tô màu đỏ */
-    .word.error {
-      color: red !important;
-    }
-    #controls {
-      margin: 20px 0;
+    .instruction {
+      margin-bottom: 20px;
+      font-style: italic;
       text-align: center;
     }
-    #transcript {
+    .text-lines {
+      margin-bottom: 20px;
+    }
+    .text-line {
+      padding: 10px;
+      margin-bottom: 5px;
+      border: 1px solid #555;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.3s;
+    }
+    .text-line:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: scale(1.02);
+    }
+    /* Các dòng được chọn sẽ nổi bật với nền đậm, viền dày, đổ bóng và hiệu ứng phóng to */
+    .selected {
+      background: rgba(0, 150, 136, 0.8);
+      border: 2px solid #00ffcc;
+      box-shadow: 0 0 10px 2px #00ffcc;
+      transform: scale(1.05);
+    }
+    .controls {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #009688;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #00796b;
+    }
+    .result {
+      font-size: 18px;
+      line-height: 1.6;
       margin-top: 20px;
-      font-style: italic;
-      color: #555;
+      text-align: center;
+    }
+    /* Đánh dấu các từ đọc sai */
+    .minor {
+      background-color: yellow;
+      color: black;
+    }
+    .error {
+      background-color: red;
+      color: white;
+    }
+    /* Đánh dấu trọng âm */
+    .accent {
+      font-weight: bold;
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <h1>Đánh Giá Phát Âm</h1>
-  <p>Chọn một câu bên dưới, sau đó ấn nút "Ghi âm" và đọc câu được chọn. Hệ thống sẽ ghi âm, so sánh và hiển thị lỗi (màu đỏ) nếu có. Các từ trọng âm (content words) được tô màu xanh.</p>
-
-  <div id="sentences"></div>
-
-  <div id="controls">
-    <button id="recordBtn">Ghi âm</button>
-    <p id="status"></p>
+  <div class="container">
+    <h1>Speech Comparison App</h1>
+    <div class="instruction">
+      Select one text line below, then press the "Start Recording" button to read and compare.
+    </div>
+    <!-- Các dòng nội dung -->
+    <div class="text-lines" id="text-lines"></div>
+    <div class="controls">
+      <button id="startBtn" disabled>Start Recording</button>
+      <button id="stopBtn" disabled>Stop Recording</button>
+    </div>
+    <!-- Kết quả so sánh -->
+    <div class="result" id="result"></div>
   </div>
-
-  <div id="transcript"></div>
-
+  
   <script>
-    // Danh sách 5 câu cho sẵn
-    const sentences = [
-      "We should finish the project for our history class",
-      "Peter is revising for his exam next week",
-      "Students will spend more time working with other classmates",
-      "I like to watch videos that help me learn new things",
-      "I have installed some apps on my phone"
+    /***** Yêu cầu truy cập micro khi mở web *****/
+    window.addEventListener("load", function() {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(function(stream) {
+            console.log("Microphone access granted.");
+            // Tạm dừng stream nếu không sử dụng ngay (để Speech Recognition tự quản lý)
+            stream.getTracks().forEach(track => track.stop());
+          })
+          .catch(function(err) {
+            console.error("Microphone access denied:", err);
+            alert("Microphone access is required to use this app. Please allow microphone access.");
+          });
+      } else {
+        alert("Your browser does not support microphone access via getUserMedia API.");
+      }
+    });
+    
+    /***** Dữ liệu nội dung *****/
+    const texts = [
+      "We should ‘finish the ‘project for our ‘history 'class",
+      "‘Peter is re‘vising for his e‘xam ‘next ‘week",
+      "‘Students will ‘spend more ‘time ‘working with ‘other ‘classmates",
+      "I ‘like to ‘watch ‘videos that ‘help me ‘learn ‘new ‘things",
+      "I have ‘installed some ‘apps on my ‘phone"
     ];
-
-    // Danh sách stopwords đơn giản (những từ chức năng, không được xem là trọng âm)
-    const stopWords = new Set([
-      "a", "an", "the", "for", "our", "is", "are", "to", "and", "of", "in", "with", "on", "that", "should", "will", "more"
-    ]);
-
-    let selectedSentenceIndex = null; // chỉ số câu được chọn
-    const sentencesDiv = document.getElementById("sentences");
-    const recordBtn = document.getElementById("recordBtn");
-    const statusEl = document.getElementById("status");
-    const transcriptEl = document.getElementById("transcript");
-
-    // Hàm vẽ lại danh sách các câu
-    function renderSentences() {
-      sentencesDiv.innerHTML = "";
-      sentences.forEach((sentence, idx) => {
-        const sentenceDiv = document.createElement("div");
-        sentenceDiv.className = "sentence" + (idx === selectedSentenceIndex ? " selected" : "");
-        sentenceDiv.addEventListener("click", () => {
-          selectedSentenceIndex = idx;
-          resetDisplay();
-          renderSentences();
+    
+    const textLinesContainer = document.getElementById("text-lines");
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const resultDiv = document.getElementById("result");
+    
+    let selectedText = null;
+    let recognition = null;
+    let recognizing = false;
+    
+    /***** Hàm hiển thị các dòng nội dung và xử lý dấu trọng âm *****/
+    function renderTextLines() {
+      texts.forEach((line, index) => {
+        const div = document.createElement("div");
+        div.classList.add("text-line");
+        div.dataset.index = index;
+        // Hàm processAccent thay thế dấu ' hoặc ‘ trước các ký tự thành thẻ span có class "accent"
+        div.innerHTML = processAccent(line);
+        div.addEventListener("click", () => {
+          document
+            .querySelectorAll(".text-line")
+            .forEach((el) => el.classList.remove("selected"));
+          div.classList.add("selected");
+          selectedText = line;
+          startBtn.disabled = false;
+          resultDiv.innerHTML = "";
         });
-        
-        // Tách câu thành các từ, hiển thị từng từ với span
-        sentence.split(" ").forEach(word => {
-          const span = document.createElement("span");
-          span.classList.add("word");
-          // Nếu không phải stop word, xem là từ trọng âm và tô màu xanh
-          if (!stopWords.has(word.toLowerCase())) {
-            span.classList.add("stressed");
-          }
-          span.textContent = word;
-          sentenceDiv.appendChild(span);
-        });
-        sentencesDiv.appendChild(sentenceDiv);
+        textLinesContainer.appendChild(div);
       });
     }
-
-    // Xóa hiển thị lỗi cũ và transcript
-    function resetDisplay() {
-      transcriptEl.textContent = "";
-      statusEl.textContent = "";
-      // Duyệt qua các câu để reset màu chữ của từng từ theo quy tắc ban đầu
-      const sentenceDivs = document.querySelectorAll(".sentence");
-      sentenceDivs.forEach(div => {
-        const spans = div.querySelectorAll("span.word");
-        spans.forEach(span => {
-          span.classList.remove("error");
-          // Đảm bảo nếu là từ trọng âm, có class stressed
-          if (!stopWords.has(span.textContent.toLowerCase())) {
-            span.classList.add("stressed");
+    
+    /* Hàm xử lý dấu trọng âm:
+       Thay thế các ký tự ' hoặc ‘ đứng trước chữ cái thành thẻ span có class "accent".
+       Ví dụ: “‘finish” → <span class="accent">finish</span>
+    */
+    function processAccent(text) {
+      return text.replace(/['‘]([A-Za-z]+)/g, "<span class='accent'>$1</span>");
+    }
+    
+    /***** Hàm tính khoảng cách Levenshtein giữa 2 chuỗi *****/
+    function levenshtein(a, b) {
+      a = a.toLowerCase();
+      b = b.toLowerCase();
+      const matrix = [];
+      for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+      }
+      for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
+      }
+      for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+          if (b.charAt(i - 1) === a.charAt(j - 1)) {
+            matrix[i][j] = matrix[i - 1][j - 1];
+          } else {
+            matrix[i][j] = Math.min(
+              matrix[i - 1][j - 1] + 1, // thay thế
+              matrix[i][j - 1] + 1,     // chèn
+              matrix[i - 1][j] + 1      // xóa
+            );
           }
-        });
+        }
+      }
+      return matrix[b.length][a.length];
+    }
+    
+    /***** So sánh nội dung gốc và nội dung ghi âm theo từ *****/
+    function compareTexts(expected, actual) {
+      const expectedWords = expected.split(" ");
+      const actualWords = actual.split(" ");
+      const comparisons = [];
+      // Duyệt qua từng từ trong văn bản gốc
+      for (let i = 0; i < expectedWords.length; i++) {
+        const expectedWord = expectedWords[i];
+        // Nếu không có từ tương ứng trong phiên ghi âm, đánh dấu là lỗi
+        const actualWord = actualWords[i] || "";
+        if (expectedWord.toLowerCase() === actualWord.toLowerCase()) {
+          comparisons.push({ word: expectedWord, status: "correct" });
+        } else {
+          const dist = levenshtein(expectedWord, actualWord);
+          const ratio = dist / Math.max(expectedWord.length, actualWord.length);
+          // Nếu sai nhiều (ratio > 0.5) → đánh dấu lỗi (màu đỏ)
+          // Nếu sai ít (0 < ratio <= 0.5) → đánh dấu nhẹ (màu vàng)
+          if (ratio > 0.5) {
+            comparisons.push({ word: expectedWord, status: "error" });
+          } else if (ratio > 0) {
+            comparisons.push({ word: expectedWord, status: "minor" });
+          } else {
+            comparisons.push({ word: expectedWord, status: "correct" });
+          }
+        }
+      }
+      return comparisons;
+    }
+    
+    /***** Hiển thị kết quả so sánh *****/
+    function displayResult(comparisons) {
+      const html = comparisons
+        .map((item) => {
+          if (item.status === "correct") return item.word;
+          else if (item.status === "minor")
+            return `<span class="minor">${item.word}</span>`;
+          else if (item.status === "error")
+            return `<span class="error">${item.word}</span>`;
+        })
+        .join(" ");
+      resultDiv.innerHTML = html;
+    }
+    
+    /***** Khởi tạo Speech Recognition *****/
+    function initRecognition() {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Your browser does not support Speech Recognition.");
+        return null;
+      }
+      const recog = new SpeechRecognition();
+      recog.lang = "en-US"; // Sử dụng tiếng Anh cho nhận diện
+      recog.interimResults = false;
+      recog.maxAlternatives = 1;
+      return recog;
+    }
+    
+    recognition = initRecognition();
+    
+    if (recognition) {
+      recognition.addEventListener("start", () => {
+        recognizing = true;
+        console.log("Recording started...");
+      });
+      
+      recognition.addEventListener("result", (event) => {
+        const transcript = Array.from(event.results)
+          .map((result) => result[0])
+          .map((result) => result.transcript)
+          .join("");
+        console.log("Recognized text:", transcript);
+        if (selectedText) {
+          const comparisons = compareTexts(selectedText, transcript);
+          displayResult(comparisons);
+        }
+      });
+      
+      recognition.addEventListener("end", () => {
+        recognizing = false;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        console.log("Recording ended.");
+      });
+      
+      recognition.addEventListener("error", (event) => {
+        console.error("Error during speech recognition:", event.error);
+        recognizing = false;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
       });
     }
-
-    renderSentences();
-
-    // Hàm chuẩn hóa từ: loại bỏ dấu câu, chuyển về chữ thường
-    function normalize(word) {
-      return word.replace(/[.,?!]/g, '').toLowerCase();
-    }
-
-    // So sánh transcript với câu gốc, đánh dấu lỗi
-    function evaluateTranscript(transcript) {
-      if (selectedSentenceIndex === null) {
-        alert("Vui lòng chọn một câu trước khi ghi âm!");
+    
+    /***** Xử lý sự kiện cho nút ghi âm *****/
+    startBtn.addEventListener("click", () => {
+      if (!selectedText) {
+        alert("Please select a text line to read.");
         return;
       }
-      const expectedSentence = sentences[selectedSentenceIndex];
-      const expectedWords = expectedSentence.split(/\s+/);
-      // Tách transcript theo khoảng trắng
-      const recognizedWords = transcript.split(/\s+/);
-
-      // Lấy phần tử DOM của câu đã chọn để cập nhật màu hiển thị
-      const sentenceDiv = sentencesDiv.children[selectedSentenceIndex];
-      const wordSpans = sentenceDiv.querySelectorAll("span.word");
-
-      let errorWords = [];
-      // So sánh từng từ
-      expectedWords.forEach((word, idx) => {
-        const normExpected = normalize(word);
-        const normRecognized = normalize(recognizedWords[idx] || "");
-        if (normExpected !== normRecognized) {
-          // Đánh dấu lỗi: xóa lớp stressed nếu có, thêm class error
-          if(wordSpans[idx]){
-            wordSpans[idx].classList.remove("stressed");
-            wordSpans[idx].classList.add("error");
-          }
-          errorWords.push(word);
-        }
-      });
-
-      // Hiển thị transcript nhận được
-      transcriptEl.textContent = "Transcript: " + transcript;
-
-      if (errorWords.length > 0) {
-        statusEl.textContent = "Phát hiện lỗi trong phát âm!";
-        provideAudioGuidance(errorWords);
-      } else {
-        statusEl.textContent = "Phát âm chính xác!";
-      }
-    }
-
-    // Sử dụng SpeechSynthesis để phát lời gợi ý cho các từ lỗi
-    function provideAudioGuidance(errorWords) {
-      const synth = window.speechSynthesis;
-      // Ghép câu gợi ý
-      const msgText = "Please listen and repeat the following words correctly: " + errorWords.join(", ");
-      const utterThis = new SpeechSynthesisUtterance(msgText);
-      // Giảm tốc độ phát âm để người dùng dễ nghe
-      utterThis.rate = 0.8;
-      synth.speak(utterThis);
-    }
-
-    // Kiểm tra hỗ trợ SpeechRecognition
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Trình duyệt của bạn không hỗ trợ Speech Recognition. Vui lòng sử dụng Chrome hoặc Edge.");
-      recordBtn.disabled = true;
-    } else {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      // Đặt ngôn ngữ tiếng Anh (do nội dung tiếng Anh)
-      recognition.lang = "en-US";
-
-      recognition.onstart = function() {
-        statusEl.textContent = "Đang ghi âm... Hãy đọc câu được chọn.";
-      };
-
-      recognition.onerror = function(event) {
-        statusEl.textContent = "Có lỗi xảy ra khi ghi âm: " + event.error;
-      };
-
-      recognition.onresult = function(event) {
-        const transcript = event.results[0][0].transcript;
-        statusEl.textContent = "Đã ghi âm xong. Đang đánh giá...";
-        evaluateTranscript(transcript);
-      };
-
-      // Bắt đầu ghi âm khi người dùng nhấn nút
-      recordBtn.addEventListener("click", function() {
-        if (selectedSentenceIndex === null) {
-          alert("Vui lòng chọn một câu trước khi ghi âm!");
-          return;
-        }
-        resetDisplay();
+      if (recognition && !recognizing) {
+        resultDiv.innerHTML = "Recording... Please read the text.";
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
         recognition.start();
-      });
-    }
+      }
+    });
+    
+    stopBtn.addEventListener("click", () => {
+      if (recognition && recognizing) {
+        recognition.stop();
+      }
+    });
+    
+    // Hiển thị các dòng nội dung khi load trang
+    renderTextLines();
   </script>
 </body>
 </html>
